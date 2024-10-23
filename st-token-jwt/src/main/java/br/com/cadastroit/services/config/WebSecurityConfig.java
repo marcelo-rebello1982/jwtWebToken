@@ -1,16 +1,9 @@
 package br.com.cadastroit.services.config;
 
-import br.com.cadastroit.services.config.security.JwtAuthenticationEntryPoint;
-import br.com.cadastroit.services.config.security.JwtRequestFilter;
-import br.com.cadastroit.services.config.security.model.UserDetailsJwt;
-import br.com.cadastroit.services.config.security.model.UserGroupJwt;
+import java.util.Base64;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
-import com.mongodb.ConnectionString;
-import com.mongodb.MongoClientSettings;
-import com.mongodb.MongoCredential;
-import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoClients;
-import lombok.RequiredArgsConstructor;
 import org.bson.UuidRepresentation;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -20,7 +13,6 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -30,9 +22,17 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import java.util.Base64;
-import java.util.List;
-import java.util.concurrent.TimeUnit;
+import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
+import com.mongodb.MongoCredential;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
+
+import br.com.cadastroit.services.config.security.JwtAuthenticationEntryPoint;
+import br.com.cadastroit.services.config.security.JwtRequestFilter;
+import br.com.cadastroit.services.config.security.model.UserDetailsJwt;
+import br.com.cadastroit.services.config.security.model.UserGroupJwt;
+import lombok.RequiredArgsConstructor;
 
 @Configuration
 @EnableWebSecurity
@@ -121,7 +121,12 @@ public class WebSecurityConfig extends WebSecurityConfigurerAdapter {
 						"/" + pathFilter + "/create-user",
 						"/" + pathFilter + "/crypt-password")
 						.permitAll())
-   						.authorizeRequests(requests ->
+        		.authorizeRequests(requests ->
+        			requests
+						.antMatchers(HttpMethod.DELETE,
+						"/" + pathFilter + "/jwtauthentication/auth/user/drop-user")
+						.permitAll())
+				.authorizeRequests(requests ->
    					requests
    						.anyRequest()
    						.authenticated())

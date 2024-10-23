@@ -1,8 +1,12 @@
 package br.com.cadastroit.services.config.security;
 
-import io.jsonwebtoken.ExpiredJwtException;
-import lombok.Builder;
-import lombok.extern.slf4j.Slf4j;
+import java.io.IOException;
+
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -14,12 +18,9 @@ import org.springframework.security.web.authentication.WebAuthenticationDetailsS
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import br.com.cadastroit.services.config.security.model.UserDetailsJwt;
-
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
+import io.jsonwebtoken.ExpiredJwtException;
+import lombok.Builder;
+import lombok.extern.slf4j.Slf4j;
 
 @Builder
 @Slf4j

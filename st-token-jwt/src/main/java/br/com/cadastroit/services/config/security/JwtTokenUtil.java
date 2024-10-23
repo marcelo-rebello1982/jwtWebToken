@@ -1,17 +1,5 @@
 package br.com.cadastroit.services.config.security;
 
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
-import io.jsonwebtoken.io.Decoders;
-import io.jsonwebtoken.security.Keys;
-import lombok.Builder;
-import lombok.Data;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.stereotype.Component;
-
-import br.com.cadastroit.services.config.domain.User;
-
 import java.io.Serializable;
 import java.text.DateFormat;
 import java.util.Date;
@@ -20,6 +8,15 @@ import java.util.Map;
 import java.util.function.Function;
 
 import javax.crypto.SecretKey;
+
+import org.springframework.security.core.userdetails.UserDetails;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
+import lombok.Builder;
+import lombok.Data;
 
 @Builder
 @Data
@@ -39,27 +36,36 @@ public class JwtTokenUtil implements Serializable {
 	
 	private long expiration 	= 0;
 	private String dateExpire 	= "";
-	
-	public String getUsernameFromToken(String token) {
-		return getClaimFromToken(token, Claims::getSubject);
-	}
 
 	public Date getExpirationDateFromToken(String token) {
 		return getClaimFromToken(token, Claims::getExpiration);
+	}
+	
+	public String getUsernameFromToken_(String token) {
+		return getClaimFromToken(token, Claims::getSubject);
 	}
 
 	public <T> T getClaimFromToken(String token, Function<Claims, T> claimsResolver) {
 		final Claims claims = getAllClaimsFromToken(token);
 		return claimsResolver.apply(claims);
 	}
+	
+	public String getUsernameFromToken(String token){
+	        Claims claims = Jwts.parser()
+	                .verifyWith(getSignKey())
+	                .build()
+	                .parseSignedClaims(token)
+	                .getPayload();
+	        return claims.getSubject();
+	}
 
 	private Claims getAllClaimsFromToken(String token) {
-		return Jwts.parser().verifyWith(
-				getSignKey())
-					.build()
-						.parseSignedClaims(token)
-							.getPayload();
-		
+			return Jwts.parser().verifyWith(
+					getSignKey())
+						.build()
+							.parseSignedClaims(token)
+								.getPayload();
+			
 	}
 	
 	private SecretKey getSignKey() {  
