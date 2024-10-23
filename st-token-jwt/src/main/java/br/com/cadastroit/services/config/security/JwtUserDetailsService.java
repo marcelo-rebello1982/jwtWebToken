@@ -1,8 +1,11 @@
 package br.com.cadastroit.services.config.security;
 
-import lombok.Builder;
-import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -16,12 +19,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import br.com.cadastroit.services.config.security.model.AuthorityUser;
 import br.com.cadastroit.services.config.security.model.UserDetailsJwt;
 import br.com.cadastroit.services.config.security.model.UserGroupJwt;
-
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
+import lombok.Builder;
+import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 
 @Data
 @Builder
