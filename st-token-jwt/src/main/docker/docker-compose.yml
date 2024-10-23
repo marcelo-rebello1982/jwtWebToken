@@ -1,0 +1,23 @@
+version: '3.7'
+services: 
+  mongodb:
+    container_name: mongodb
+    image: mongo:latest
+    ports: 
+      - "27017:27017"
+    volumes: 
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/local/opt/dockerdata/mongo:/data/db
+    networks: 
+      - compliance
+  cst-jwt-token:
+    container_name: cst-jwt-token
+    image: compliancefiscal/csfapis:cst-jwt-token
+    networks: 
+      - compliance
+    depends_on: 
+      - mongodb
+networks: 
+  compliance:
+    name: compliance
+    driver: bridge

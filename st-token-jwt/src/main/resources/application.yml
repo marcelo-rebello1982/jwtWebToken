@@ -1,0 +1,22 @@
+spring:
+  application:
+    name: st-jwt-token
+
+  data:
+    mongodb:
+      database: st-boot-jwt
+      host: localhost 
+      password: Y3N0LWJvb3Qtand0LTIwWFgjI0A=
+      username: st-boot-jwt-20XX
+
+server:
+  port: 0
+    
+eureka:
+  instance:
+    instance-id: ${spring.application.name}
+  client:
+    service-url:
+      defaultZone: http://eureka.server:9100/eureka
+
+#db.createUser({user:"st-boot-jwt-20XX",pwd:"Y3N0LWJvb3Qtand0LTIwWFgjI0A=", roles: [{ role: "readWrite", db: "st-boot-jwt" }], passwordDigestor:"server"});
