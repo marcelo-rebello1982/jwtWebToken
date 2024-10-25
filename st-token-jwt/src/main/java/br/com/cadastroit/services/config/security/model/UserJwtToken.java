@@ -27,4 +27,5 @@ public class UserJwtToken implements Serializable {
 	private String message;
 	private HttpStatus httpStatus;
 	private int httpStatusCode;
+	private long daysToExpire;
 }

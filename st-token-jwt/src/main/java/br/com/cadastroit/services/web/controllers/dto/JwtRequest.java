@@ -19,6 +19,7 @@ public class JwtRequest implements Serializable {
     private String password;
     private String token;
     private String group;
+    private Long daysToExpire;
     private boolean crypt;
 
 }

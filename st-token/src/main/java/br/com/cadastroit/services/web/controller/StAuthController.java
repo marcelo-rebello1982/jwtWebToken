@@ -1,13 +1,11 @@
 package br.com.cadastroit.services.web.controller;
 
-import java.text.DateFormat;
-import java.util.Base64;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.IntStream;
-
-import org.apache.commons.lang.time.DateUtils;
+import java.util.concurrent.TimeUnit;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -25,6 +23,7 @@ import br.com.cadastroit.services.api.services.AuthService;
 import br.com.cadastroit.services.config.domain.Authority;
 import br.com.cadastroit.services.config.domain.AuthorityUser;
 import br.com.cadastroit.services.config.domain.User;
+import br.com.cadastroit.services.web.controllers.dto.JwtResponse;
 import br.com.cadastroit.services.web.model.AuthDTO;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -39,7 +38,6 @@ public class StAuthController {
 	private final PasswordEncoder passwordEncoder;
 	private final AuthService service;
 	
-
 	@ApiOperation(value = "Create a new user")
 	@PostMapping(value = "/create")
 	public ResponseEntity<Object> createUser(@ApiParam(required = true, value = "Creating new users. The roles are: Admin, Customer, or User.")
@@ -91,30 +89,38 @@ public class StAuthController {
 		}
 	}
 
-	// ajustar e conferir a questão do token expirado, esta errado a lógica.
 	@ApiOperation(value = "Requesting token (Valid for 24 hours if daysToExpire not declared in request body )")
 	@PostMapping(value = "/request/token")
-	public ResponseEntity<Object> createAuthenticationToken(@ApiParam(required = true, value = "Provide the username and password") @RequestBody AuthDTO authDTO) throws Exception {
+	public ResponseEntity<Object> requestAuthenticationToken(@ApiParam(required = true, value = "Provide the username and password") @RequestBody AuthDTO authDTO) throws Exception {
+		
 		try {
 			
-			long expire = System.currentTimeMillis();
+			long actualDate = System.currentTimeMillis();
 			User userDTO = this.service.findByUsername(authDTO.getUsername()); // validate user
 			
-			// ajustar para validar com user/pass
-			// User userDTO = this.service.findByUsername(authDTO.getUsername(), passwordEncoder.encode(authDTO.getPassword())); 
-			
 			if(userDTO != null) {
+				
 				boolean matchPassword = passwordEncoder.matches(authDTO.getPassword(), userDTO.getPassword());
+				
 				if(matchPassword) {
-					if(userDTO.getToken() == null) {
-						userDTO = createUserToken(userDTO, authDTO.getDaysToExpire() > 0 ? authDTO.getDaysToExpire() : 1 );
-						return ResponseEntity.ok(AuthDTO.builder().token(userDTO.getToken()).dateExpire(userDTO.getDateExpire()).build());
-					} else {
 					
-						return authDTO.getExpire() > expire 
-								? ResponseEntity.ok(AuthDTO.builder().token(userDTO.getToken()).dateExpire(userDTO.getDateExpire()).build())
-								: ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token expired, access the path '/update/token'...\n Token: [" + userDTO.getToken() +"]");
-					}
+					if(userDTO.getToken() == null) {
+						userDTO = this.createUserToken(userDTO, authDTO.getDaysToExpire() > 0 ? authDTO.getDaysToExpire() : 1 );
+						return ResponseEntity.ok(AuthDTO.builder().token(userDTO.getToken()).dateExpire(userDTO.getDateExpire()).build());
+						
+					} else
+						
+						return actualDate < userDTO.getExpireAtDate() 
+								? ResponseEntity.ok(AuthDTO.builder()
+										.token(userDTO.getToken())
+										.dateExpire(userDTO.getDateExpire())
+										.expire(userDTO.getExpireAtDate())
+										.daysToExpire(userDTO.getExpireInDays())
+										.build())
+								: ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(JwtResponse.builder()
+										.message("Token expired, access the path '/update/token' ...")
+										.token(userDTO.getToken()).build());
+					
 				} else {
 					return ResponseEntity.status(HttpStatus.FORBIDDEN).body("\"Access denied, invalid username or password.");
 				}
@@ -139,7 +145,7 @@ public class StAuthController {
 			boolean matchUser = user != null && user.getId() != null;
 			
 			return matchUser 
-					? ResponseEntity.ok(this.mapUserToDTO(createUserToken(user, 1)))
+					? ResponseEntity.ok(this.mapUserToDTO(this.createUserToken(user, authDTO.getDaysToExpire())))
 				    : ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied, invalid username or password...");
 			
 		}catch(Exception ex) {
@@ -149,17 +155,19 @@ public class StAuthController {
 	
 	@ApiOperation(value = "For token recovery. Path for token recovery using username and password.")
 	@PostMapping(value = "/recovery/token")
-	public ResponseEntity<Object> recoveryAuthenticationToken(
-			@ApiParam(required = true, value = "send the AuthDTO object with username and password only.")
-			@RequestBody AuthDTO authDTO) throws Exception {
+	public ResponseEntity<Object> recoveryAuthenticationToken(@ApiParam(required = true, value = "send the AuthDTO object with username and password only.") @RequestBody AuthDTO authDTO)
+			throws Exception {
+		
 		try {
+			
 			User user = this.service.findByUsername(authDTO.getUsername());
-			if(user != null && user.getId() != null) {
-				
+			
+			if(validateUser(user)) {
+
 				boolean matchPassword = passwordEncoder.matches(authDTO.getPassword(), user.getPassword());
 				
 				return matchPassword 
-						? ResponseEntity.ok(this.mapUserToDTO(createUserToken(user, 1)))
+						? ResponseEntity.ok(this.mapToJwtResponse(this.createUserToken(user, authDTO.getDaysToExpire())))
 					    : ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access denied, invalid username or password...");
 				
 			} else {
@@ -169,6 +177,8 @@ public class StAuthController {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
 		}
 	}
+	
+	
 
 	@ApiOperation(value = "For password update only")
 	@PutMapping(value = "/update/password")
@@ -234,22 +244,55 @@ public class StAuthController {
 		}
 	}
 	
-	private User createUserToken(User user, long days) throws Exception {
+	private User createUserToken(User user, long daysToExpire) throws Exception {
 
 		try {
-			return this.service.createUserToken(user, days);
+			return this.service.createUserToken(user, daysToExpire);
 		} catch (Exception e) {
 			throw new Exception(e);
 		}
 	}
 
 	private AuthDTO mapUserToDTO(User user){
-		
+
 		AuthDTO authDTO = new AuthDTO();
 		authDTO.setToken(user.getToken());
 		authDTO.setExpire(user.getExpireAtDate());
 		authDTO.setDateExpire(user.getDateExpire());
-		authDTO.setDaysToExpire(user.getExpireAtDate());
+		authDTO.setDaysToExpire(this.getDaysDifference(System.currentTimeMillis(), user.getExpireAtDate()));
 		return authDTO;
+		
 	}
+	
+	private JwtResponse mapToJwtResponse(User user){
+
+		JwtResponse jwtResponse = JwtResponse.builder()
+									.token(user.getToken())
+									.jwttoken(user.getToken())
+									.expire(user.getExpireAtDate())
+									.dateExpire(user.getDateExpire())
+									.build();
+		
+		return jwtResponse;
+		
+	}
+	
+	private boolean validateUser(User user) {
+		return user != null && user.getId() != null;
+	}
+
+	private long getDaysDifference(long startTime, long endTime) {
+	    return ChronoUnit.DAYS.between(Instant.ofEpochMilli(startTime),
+	    									Instant.ofEpochMilli(endTime));
+	}
+	
+	private long getDaysDifference_(long startTime, long endTime) {
+	    return TimeUnit.MILLISECONDS.toDays(Math.abs(endTime - startTime));
+	}
+
+	private long getDaysDifferenceManual(long startTime, long endTime) {
+	    long diffMillis = Math.abs(endTime - startTime);
+	    return diffMillis / (24 * 60 * 60 * 1000);
+	}
+
 }

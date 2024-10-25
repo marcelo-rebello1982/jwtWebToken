@@ -14,6 +14,7 @@ import lombok.Builder;
 @Builder
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint, Serializable {
 	
+
 	private static final long serialVersionUID = 5733110103396996520L;
 
 	@Override

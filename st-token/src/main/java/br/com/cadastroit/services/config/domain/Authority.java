@@ -26,8 +26,8 @@ import lombok.NoArgsConstructor;
 @Document(collection = "authority")
 public class Authority implements Serializable {
 
-    private static final long serialVersionUID = 1L;
-
+	private static final long serialVersionUID = -6620917242611512798L;
+	
 	@Id
     private ObjectId id;
     private UUID uuid;

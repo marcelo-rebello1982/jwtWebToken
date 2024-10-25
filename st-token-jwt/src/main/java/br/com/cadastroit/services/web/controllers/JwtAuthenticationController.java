@@ -2,7 +2,6 @@ package br.com.cadastroit.services.web.controllers;
 
 import java.util.Optional;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.http.HttpStatus;
@@ -21,7 +20,6 @@ import br.com.cadastroit.services.config.security.JwtUserDetailsService;
 import br.com.cadastroit.services.config.security.model.UserDetailsJwt;
 import br.com.cadastroit.services.config.security.model.UserGroupJwt;
 import br.com.cadastroit.services.config.security.model.UserJwtToken;
-import br.com.cadastroit.services.repository.UserDetailJwtRepository;
 import br.com.cadastroit.services.web.controllers.dto.JwtRequest;
 import br.com.cadastroit.services.web.controllers.dto.JwtResponse;
 import io.swagger.annotations.ApiOperation;
@@ -35,60 +33,52 @@ public class JwtAuthenticationController {
 
 	public final MongoTemplate mongoTemplate;
 	private final PasswordEncoder passwordEncoder;
-	private final UserDetailJwtRepository userDetailJwtRepository;
 	private JwtTokenUtil jwtTokenUtil;
-	private JwtUserDetailsService userDetailsService;
+	
+	private JwtUserDetailsService jwtUserDetailsService;
 
-	@Autowired
-	private JwtAuthenticationService service;
+	private final JwtAuthenticationService jwtAuthenticationService;
 
 	@ApiOperation(value = "Check username / password and returns a access-token that has 24 hours of validity")
 	@PostMapping(value = "/token")
-	public ResponseEntity<Object> createAuthenticationToken(@ApiParam(required = true, value = "Fill the object JwtRequest with username and password only") @RequestBody JwtRequest jwtRequest)
+	public ResponseEntity<Object> refreshValidityToken(@ApiParam(required = true, value = "Fill the object JwtRequest with username and password only") @RequestBody JwtRequest jwtRequest)
 			throws Exception {
 
 		try {
 			
 			Criteria criteria = Criteria.where("username").is(jwtRequest.getUsername());
-			UserDetailsJwt userDetailsJwt = this.service.findNoSqlUser(criteria, jwtRequest);
+			UserDetailsJwt userDetailsJwt = this.jwtAuthenticationService.findNoSqlUser(criteria, jwtRequest);
 			
-			if (validateUserDetails(userDetailsJwt)) {
-				if (mathPassword(jwtRequest.getPassword(), userDetailsJwt)) {
+			if (validateUser(userDetailsJwt) && mathPassword(jwtRequest.getPassword(), userDetailsJwt)) {
 					
 					if (userDetailsJwt.getJwttoken() == null) {
 						
-						UserJwtToken userJwtToken = service.createUserToken(userDetailsJwt, jwtRequest);
+						UserJwtToken userJwtToken = this.jwtAuthenticationService.createUserToken(userDetailsJwt, jwtRequest);
 						
 						return ResponseEntity.ok(new JwtResponse(
 											userJwtToken.getToken(),
 											userJwtToken.getToken(),
-											userJwtToken.getExpiration(),
-											userJwtToken.getDateExpire()
+											userJwtToken.getJwtTokenUtil().getExpiration(),
+											userJwtToken.getJwtTokenUtil().getDateExpire(),
+											""
 								));
 						
 					} else 
 						
 						return (validateTokenDate(userDetailsJwt))
 								
-								? ResponseEntity.ok(new JwtResponse(userDetailsJwt.getJwttoken(), userDetailsJwt.getJwttoken(),
-										userDetailsJwt.getExpire(), userDetailsJwt.getDateExpire()))
+								? ResponseEntity.ok(new JwtResponse(
+										userDetailsJwt.getJwttoken(), 
+										userDetailsJwt.getJwttoken(),
+										userDetailsJwt.getExpire(),
+										userDetailsJwt.getDateExpire(),
+										""
+								))
+										
 								: ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token has expired, please refresh it...");
 					
-				} else 
-					
-					return ResponseEntity.status(HttpStatus.FORBIDDEN).body(UserJwtToken.builder()
-							.message("Access Denied, credentials are invalid...")
-							.httpStatus(HttpStatus.FORBIDDEN)
-							.httpStatusCode(HttpStatus.FORBIDDEN.value())
-							.build());
-					
-			} else 
-				
-				return ResponseEntity.status(HttpStatus.FORBIDDEN).body(UserJwtToken.builder()
-						.message("Access Denied, credentials are invalid...")
-						.httpStatus(HttpStatus.FORBIDDEN)
-						.httpStatusCode(HttpStatus.FORBIDDEN.value())
-						.build());
+			} else
+				return errorResponse();
 				
 		} catch (Exception ex) {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
@@ -103,27 +93,42 @@ public class JwtAuthenticationController {
 		try {
 
 			Criteria criteria = Criteria.where("username").is(jwtRequest.getUsername());
-			UserDetailsJwt userDetailsJwt = this.service.findNoSqlUser(criteria, jwtRequest);
+			UserDetailsJwt userDetailsJwt = this.jwtAuthenticationService.findNoSqlUser(criteria, jwtRequest);
 
 			if (userDetailsJwt == null) {
 
-				UserGroupJwt userGroupJwt = this.service.returnUserGroup(jwtRequest);
+				UserGroupJwt userGroupJwt = this.jwtAuthenticationService.findUserGroup(jwtRequest);
 				
 				return (validateUserGroup(userGroupJwt))
 						
 						? ResponseEntity.ok(
 								this.mongoTemplate.save(
-										this.service.buildJwtUserDetais(userGroupJwt, jwtRequest)) != null
-								? UserJwtToken.builder().user(jwtRequest.getUsername()).message("has created successfully...").build()										
-								: UserJwtToken.builder().message("Error at creating user...").build())
-						: ResponseEntity.status(HttpStatus.NOT_FOUND).body(UserJwtToken.builder().message("User group not found...").build());
+										this.jwtAuthenticationService.buildJwtUserDetais(userGroupJwt, jwtRequest)) != null
+								?
+										UserJwtToken.builder()
+										.user(jwtRequest.getUsername())
+										.group(userGroupJwt.getGroup())
+										.daysToExpire(jwtRequest.getDaysToExpire())
+										.httpStatus(HttpStatus.OK)
+										.httpStatusCode(HttpStatus.OK.value())
+										.message("has created successfully...").build()										
+								:
+										UserJwtToken.builder().message("Error at creating user...").build())
+								
+						: ResponseEntity.status(HttpStatus.NOT_FOUND).body(
+													UserJwtToken.builder()
+														.message("User group not found...")
+															.build());
 				
-			} else {
+			} else 
 				return ResponseEntity.status(HttpStatus.FORBIDDEN)
-						.body("Username " + jwtRequest.getUsername() + " not available...");
-			}
+											.body("Username " + jwtRequest.getUsername() + " not available...");
+			
 		} catch (Exception ex) {
-			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
+			
+			return ResponseEntity.status(HttpStatus.FORBIDDEN)
+									.body(ex.getMessage());
+			
 		}
 	}
 	
@@ -135,9 +140,9 @@ public class JwtAuthenticationController {
 		try {
 			
 			Criteria criteria = Criteria.where("username").is(jwtRequest.getUsername());
-			UserDetailsJwt userDetailsJwt = this.service.findNoSqlUser(criteria, jwtRequest);
+			UserDetailsJwt userDetailsJwt = this.jwtAuthenticationService.findNoSqlUser(criteria, jwtRequest);
 			
-			if (validateUserDetails(userDetailsJwt) && mathPassword(jwtRequest.getPassword(), userDetailsJwt)) {
+			if (validateUser(userDetailsJwt) && mathPassword(jwtRequest.getPassword(), userDetailsJwt)) {
 				
 					return Optional.ofNullable(userDetailsJwt)
 						    .map(u -> {
@@ -146,36 +151,41 @@ public class JwtAuthenticationController {
 						    }).orElse(errorResponse());
 					
 				} else return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access Denied, credentials are invalid!");
+			
 		} catch (Exception ex) {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
 		}
 	}
-	
 
-	@ApiOperation(value = "Check validity from access-token.")
+	@ApiOperation(value = "get validity from access-token.")
 	@PostMapping(value = "/checkvaliditytoken")
-	public ResponseEntity<Object> createRefreshToken(@ApiParam(required = true, value = "Fill the object JwtRequest with jwttoken only") @RequestBody JwtRequest jwtRequest)
+	public ResponseEntity<Object> checkvaliditytoken(@ApiParam(required = true, value = "Fill the object JwtRequest with jwttoken only") @RequestBody JwtRequest jwtRequest)
 			throws Exception {
 
 		try {
 			
 			Criteria criteria = Criteria.where("jwttoken").is(jwtRequest.getToken());
-			UserDetailsJwt userDetailsJwt = this.service.findNoSqlUser(this, criteria, jwtRequest);
+			UserDetailsJwt userDetailsJwt = this.jwtAuthenticationService.findNoSqlUser(criteria, jwtRequest);
+			
+			if ((userDetailsJwt == null)) 
+				return errorResponse();
+			
 			jwtRequest.setUsername(userDetailsJwt.getUsername());
 
-			if (validateUserDetails(userDetailsJwt)) {
-				
-				String token[] = service.createUserTokenStr(userDetailsJwt, jwtRequest);
+			if (validateUser(userDetailsJwt)) {
 				
 				return ResponseEntity.ok(new JwtResponse(
-								token[0],
-								token[0],
-								Long.valueOf(token[1]),
-								token[2]
+								null,
+								null,
+								Long.valueOf(userDetailsJwt.getExpire()),
+								userDetailsJwt.getDateExpire(),
+								"credentials are valid!"
 						));
 				
 			} else {
+				
 				return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access Denied, credentials are invalid!");
+				
 			}
 		} catch (Exception ex) {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
@@ -190,21 +200,19 @@ public class JwtAuthenticationController {
 		try {
 			
 			Criteria criteria = Criteria.where("username").is(jwtRequest.getUsername());
-			UserDetailsJwt userDetailsJwt = this.service.findNoSqlUser(this, criteria, jwtRequest);
+			UserDetailsJwt userDetailsJwt = this.jwtAuthenticationService.findNoSqlUser(criteria, jwtRequest);
 			
-			if (!passwordEncoder.matches(jwtRequest.getPassword(), userDetailsJwt.getPassword())) {
-			    return ResponseEntity.status(HttpStatus.FORBIDDEN)
-			        .body("Access Denied, credentials are invalid...");
-			}
+			if ( !validateUser(userDetailsJwt) || ( !mathPassword(jwtRequest.getPassword(), userDetailsJwt)) )
+				
+				return errorResponse();
 
-			String token[] = service.createUserTokenStr(userDetailsJwt, jwtRequest);
+			String token[] = this.jwtAuthenticationService.createUserTokenStr(userDetailsJwt, jwtRequest);
 			
-			return ResponseEntity.ok(new JwtResponse(
-							token[0],
-							token[0],
-							Long.valueOf(token[1]),
-							token[2]
-					));
+			return ResponseEntity.ok(JwtResponse.builder().token(token[0])
+					.jwttoken(token[0])
+					.expire(Long.valueOf(token[1]))
+					.dateExpire(token[2])
+					.build());
 			
 		} catch (Exception ex) {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
@@ -212,14 +220,15 @@ public class JwtAuthenticationController {
 	}
 
 	@ApiOperation(value = "To change password. After that, the user needs to request data to get a new token.")
-	@PutMapping(value = "/update-password")
+	@PutMapping(value = "/updatepassword")
 	public ResponseEntity<Object> updateUser(@ApiParam(required = true, value = "Fill the object JwtRequest with username and the new password only") @RequestBody JwtRequest jwtRequest)
 			throws Exception {
 
 		try {
-			Criteria criteria = Criteria.where("username").is(jwtRequest.getUsername());
 			
-			UserDetailsJwt userDetailsJwt = this.service.findNoSqlUser(this, criteria, jwtRequest);
+			Criteria criteria = Criteria.where("username").is(jwtRequest.getUsername());
+			UserDetailsJwt userDetailsJwt = this.jwtAuthenticationService.findNoSqlUser(criteria, jwtRequest);
+			
 			if (userDetailsJwt != null) {
 				userDetailsJwt.setPassword(passwordEncoder.encode(jwtRequest.getPassword()));
 				userDetailsJwt.setExpire(0l);
@@ -243,34 +252,43 @@ public class JwtAuthenticationController {
 			throws Exception {
 
 		try {
-			return ResponseEntity.ok(service.processPassword(jwtRequest));
+			return ResponseEntity.ok(this.jwtAuthenticationService.processPassword(jwtRequest));
 		} catch (Exception ex) {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
 		}
 	}
-
-	public JwtTokenUtil jwtTokenUtil() {
-
-		if (this.jwtTokenUtil == null) {
-			this.jwtTokenUtil = JwtTokenUtil.builder().build();
-		}
-		return jwtTokenUtil;
-	}
 	
-	public JwtUserDetailsService jwtUserDetailsService() {
+	private ResponseEntity<Object> successResponse(UserDetailsJwt userDetailsJwt) {
 
-		if (this.userDetailsService == null) {
-			this.userDetailsService = JwtUserDetailsService.builder().mongoTemplate(this.mongoTemplate).encoder(this.passwordEncoder).build();
-		}
-		return this.userDetailsService;
+		return ResponseEntity.status(HttpStatus.MOVED_PERMANENTLY)
+				.body(UserJwtToken.builder()
+						.user(userDetailsJwt.getUsername())
+						.message("User has removed successfully...")
+						.httpStatus(HttpStatus.MOVED_PERMANENTLY)
+						.httpStatusCode(HttpStatus.MOVED_PERMANENTLY.value())
+						.build());
+		
+	}
+
+	private ResponseEntity<Object> errorResponse() {
+
+		return ResponseEntity.status(HttpStatus.FORBIDDEN)
+				.body(UserJwtToken.builder()
+		        		.message("Access Denied, credentials are invalid...")
+		        		.httpStatus(HttpStatus.FORBIDDEN)
+		        		.httpStatusCode(HttpStatus.FORBIDDEN.value())
+		        		.build());
 	}
 	
 	private boolean validateUserGroup(UserGroupJwt userGroup) {
 		return userGroup != null && userGroup.getGroup() != null;
 	}
 	
-	private boolean validateUserDetails(UserDetailsJwt userDetailsJwt) {
-		return userDetailsJwt != null && userDetailsJwt.get_id() != null;
+	private boolean validateUser(UserDetailsJwt userDetailsJwt) {
+		
+		this.jwtUserDetailsService = this.buildJwtUserDetailsService();
+		
+		return jwtUserDetailsService.validateUserDetails(userDetailsJwt);
 	}
 	
 	private boolean validateTokenDate(UserDetailsJwt userDetailsJwt) {
@@ -286,24 +304,20 @@ public class JwtAuthenticationController {
 		return matchPassword;
 	}
 	
-	private ResponseEntity<Object> successResponse(UserDetailsJwt userDetailsJwt) {
+	public JwtUserDetailsService buildJwtUserDetailsService() {
 
-		return ResponseEntity.status(HttpStatus.MOVED_PERMANENTLY)
-				.body(UserJwtToken.builder()
-						.user(userDetailsJwt.getUsername())
-						.message("User has removed successfully...")
-						.httpStatus(HttpStatus.MOVED_PERMANENTLY)
-						.build());
-		
+		if (this.jwtUserDetailsService == null) {
+			this.jwtUserDetailsService = JwtUserDetailsService.builder().mongoTemplate(this.mongoTemplate).encoder(this.passwordEncoder).build();
+		}
+		return this.jwtUserDetailsService;
 	}
+	
+	public JwtTokenUtil buildJwtTokenUtil() {
 
-	private ResponseEntity<Object> errorResponse() {
-
-		return ResponseEntity.status(HttpStatus.FORBIDDEN)
-				.body(UserJwtToken.builder()
-						.message("Access Denied, credentials are invalid...")
-						.build());
-		
+		if (this.jwtTokenUtil == null) {
+			this.jwtTokenUtil = JwtTokenUtil.builder().build();
+		}
+		return jwtTokenUtil;
 	}
 	
 }

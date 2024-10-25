@@ -62,7 +62,7 @@ public class SwaggerConfig extends WebMvcConfigurationSupport{
 				  .version("1.0.0")
 				  .license("Apache License 2.0.0")
 				  .licenseUrl("https://www.apache.org/licenses/LICENSE-2.0\"")
-				  .contact(new Contact("Marcelo Paulo Rebello Martins", "https://marcelo-rebello.com.br", "contactc@marcelo-rebello.com.br"))
+				  .contact(new Contact("Marcelo Paulo Rebello Martins", "https://marcelo-rebello.com.br", "contact@marcelo-rebello.com.br"))
 				  .build();
 	}
 	

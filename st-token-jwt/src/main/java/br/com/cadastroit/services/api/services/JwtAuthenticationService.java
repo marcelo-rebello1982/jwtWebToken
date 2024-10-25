@@ -1,6 +1,12 @@
 package br.com.cadastroit.services.api.services;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
+import java.util.Date;
+import java.util.Optional;
 
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
@@ -15,7 +21,7 @@ import br.com.cadastroit.services.config.security.model.UserDetailsJwt;
 import br.com.cadastroit.services.config.security.model.UserGroupJwt;
 import br.com.cadastroit.services.config.security.model.UserJwtToken;
 import br.com.cadastroit.services.repository.UserDetailJwtRepository;
-import br.com.cadastroit.services.web.controllers.JwtAuthenticationController;
+import br.com.cadastroit.services.utils.DateUtils;
 import br.com.cadastroit.services.web.controllers.dto.JwtRequest;
 import lombok.AllArgsConstructor;
 
@@ -29,18 +35,20 @@ public class JwtAuthenticationService {
 	
 	public final UserDetailJwtRepository userDetailJwtRepository;
 	
+	static final long EXPIRATION_TIME = System.getenv("expire") != null ? (Long.parseLong(System.getenv("EXPIRE")) * (1000 * 60 * 60 * 24))	: (1000 * 60 * 60 * 24);
+	
 	public UserDetailsJwt findNoSqlUser(Criteria criteria, JwtRequest jwtRequest) {
 		
 		UserDetailsJwt userDetailsJwt = this.mongoTemplate.findOne(new Query(criteria), UserDetailsJwt.class);
 		return userDetailsJwt;
 	}
 	
-	public UserDetailsJwt findNoSqlUser(JwtAuthenticationController jwtAuthenticationController, Criteria criteria, JwtRequest jwtRequest) {
+	public UserDetailsJwt findNoSqlUser(Criteria criteria) {
 		UserDetailsJwt userDetailsJwt = this.mongoTemplate.findOne(new Query(criteria), UserDetailsJwt.class);
 		return userDetailsJwt;
 	}
 	
-	public UserGroupJwt returnUserGroup(JwtRequest jwtRequest) {
+	public UserGroupJwt findUserGroup(JwtRequest jwtRequest) {
 		UserGroupJwt userGroupJwt = this.mongoTemplate.findOne(new Query(Criteria.where("group").is(jwtRequest.getGroup().toLowerCase())),UserGroupJwt.class);
 		return userGroupJwt;
 	}
@@ -57,8 +65,8 @@ public class JwtAuthenticationService {
 	}
 
 	public String[] createUserTokenStr(UserDetailsJwt userDetailsJwt, JwtRequest jwtRequest) throws Exception{
+		
 		try {
-			
 			
 			JwtTokenUtil jwtTokenUtil = this.createJwtTokenUtil();
 			JwtUserDetailsService userDetailsService = this.createJwtUserDetailsService();
@@ -67,8 +75,10 @@ public class JwtAuthenticationService {
 			userDetailsService.setPassword(userDetailsJwt.getPassword());
 			userDetailsService.setTextPlainPass(jwtRequest.getPassword());
 			
+			Long dateToExpire =  this.calculateDateToExpire(jwtRequest.getDaysToExpire());
+
 			final UserDetails userDetails = userDetailsService.loadUserByUsername(userDetailsJwt.getUsername());
-			final String token 			  = jwtTokenUtil.generateToken(userDetails);
+			final String token 			  = jwtTokenUtil.generateToken(userDetails, dateToExpire);
 			
 			userDetailsJwt.setJwttoken(token);
 			userDetailsJwt.setDateExpire(jwtTokenUtil.getDateExpire());
@@ -99,8 +109,10 @@ public class JwtAuthenticationService {
 			userDetailsService.setPassword(userDetailsJwt.getPassword());
 			userDetailsService.setTextPlainPass(jwtRequest.getPassword());
 			
+			Long daysToExpire =  this.calculateDateToExpire(jwtRequest.getDaysToExpire());
+			
 			final UserDetails userDetails = userDetailsService.loadUserByUsername(userDetailsJwt.getUsername());
-			final String token 			  = jwtTokenUtil.generateToken(userDetails);
+			final String token 			  = jwtTokenUtil.generateToken(userDetails, daysToExpire);
 			
 			userDetailsJwt.setJwttoken(token);
 			userDetailsJwt.setDateExpire(jwtTokenUtil.getDateExpire());
@@ -120,6 +132,42 @@ public class JwtAuthenticationService {
 		} catch (Exception e) {
 			throw new Exception (e);
 		}
+	}
+	
+	
+	public static long getDaysBetweenUtc(long startDate, long endDate, int addDays) {
+		LocalDateTime date1 = LocalDateTime.ofInstant(Instant.ofEpochMilli(startDate), ZoneOffset.UTC);
+		LocalDateTime date2 = LocalDateTime.ofInstant(Instant.ofEpochMilli(endDate), ZoneOffset.UTC);
+		return ChronoUnit.DAYS.between(date1, date2);
+	}
+
+	public long addDaysUtc(long timestamp, long days) {
+
+		return LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), 
+				ZoneOffset.UTC).plusDays(days)
+					.toInstant(ZoneOffset.UTC)
+						.toEpochMilli();
+		
+	}
+	
+	private long calculateDateToExpire(Long daysToExpire) {
+		
+		long days = Optional.ofNullable(DateUtils.getDaysBetweenUtc(
+						DateUtils.getCurrentUtcTimestamp(), 
+							this.calculateTokenValidity(daysToExpire)))
+								.orElse(1L);
+		return Instant.now()
+					.plus(days * EXPIRATION_TIME, ChronoUnit.MILLIS)
+						.toEpochMilli();
+		
+	}
+	
+	private long calculateTokenValidity (Long daysToExpire) {
+		
+		return new Date(System.currentTimeMillis() +
+				( EXPIRATION_TIME * ( daysToExpire != null ?
+						daysToExpire : 1L ))).getTime();
+		
 	}
 
 	// use to crypt ou decrypt password 
@@ -167,4 +215,5 @@ public class JwtAuthenticationService {
 
 		return userDetailsService;
 	}
+
 }

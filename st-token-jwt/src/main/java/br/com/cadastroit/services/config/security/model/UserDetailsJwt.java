@@ -19,7 +19,7 @@ import lombok.NoArgsConstructor;
 @Document(collection = "user_detail_jwt")
 public class UserDetailsJwt implements Serializable {
 
-	private static final long serialVersionUID = 1l;
+	private static final long serialVersionUID = 3681966173082401277L;
 
 	@Id
 	private ObjectId _id;

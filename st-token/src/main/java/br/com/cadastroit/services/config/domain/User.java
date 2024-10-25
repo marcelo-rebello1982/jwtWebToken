@@ -27,9 +27,9 @@ import lombok.RequiredArgsConstructor;
 @Document(collection = "user")
 public class User implements Serializable {
 
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 8478313804812563486L;
 
-    @Id
+	@Id
     private ObjectId id;
 
     @Indexed

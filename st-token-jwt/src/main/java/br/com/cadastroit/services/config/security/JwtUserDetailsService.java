@@ -63,4 +63,8 @@ public class JwtUserDetailsService implements UserDetailsService{
 			return new ArrayList<>();
 		}
 	}
+	
+	public boolean validateUserDetails(UserDetailsJwt userDetailsJwt) {
+		return userDetailsJwt != null && userDetailsJwt.get_id() != null;
+	}
 }

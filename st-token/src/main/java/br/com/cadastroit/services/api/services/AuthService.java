@@ -3,6 +3,8 @@ package br.com.cadastroit.services.api.services;
 import java.text.DateFormat;
 import java.util.Base64;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -19,21 +21,31 @@ import lombok.AllArgsConstructor;
 public class AuthService {
 	
 	private MongoTemplate mongoTemplate;
+	
+	static final long EXPIRATION_TIME = System.getenv("expire") != null ? (Long.parseLong(System.getenv("EXPIRE")) * (1000 * 60 * 60 * 24))	: (1000 * 60 * 60 * 24);
 
-	public User createUserToken(User user, long days) throws Exception{
+	public User createUserToken(User user, long daysToExpire) throws Exception{
+		
 		try {
+			
 			TokenCriteria tokenCriteria = TokenCriteria.builder().build();
 			user = this.findByUsername(user.getUsername());
+			
 			if(user != null) {
 				
-				final String token = tokenCriteria.generateToken(user);
+				Long expireIndays = new Date(System.currentTimeMillis() + ( EXPIRATION_TIME * daysToExpire )).getTime();
+				
+				final String token = tokenCriteria.generateToken(user, expireIndays);
+				
 				user.setToken(token);
 				user.setDateExpire(tokenCriteria.getDateExpire());
-				user.setExpireInDays(tokenCriteria.getExpiration());
+				user.setExpireInDays(expireIndays);
+				user.setExpireAtDate(tokenCriteria.getExpiration());
 				user.setEnabled(true);
 				user = this.mongoTemplate.save(user);
 				
 				return user;
+				
 			}else{
 				throw new Exception(String.format("invalid credentials..."));
 			}

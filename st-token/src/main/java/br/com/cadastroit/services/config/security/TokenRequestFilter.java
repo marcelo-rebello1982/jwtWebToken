@@ -27,8 +27,8 @@ public class TokenRequestFilter extends OncePerRequestFilter {
     private MongoTemplate mongoTemplate;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
-            throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
+    	
         final TokenCriteria tokenCriteria = TokenCriteria.builder().build();
         final String requestTokenHeader   = request.getHeader("Authorization");
 
@@ -61,11 +61,14 @@ public class TokenRequestFilter extends OncePerRequestFilter {
 
         if (processRequest && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails = TokenUserDetailsService.builder().mongoTemplate(this.mongoTemplate).build().loadUserByUsername(username);
-            if (tokenCriteria.validateToken(jwtToken, userDetails)) {//if token is valid configure Spring Security to manually set authentication
+            
+          //if token is valid configure Spring Security to manually set authentication
+            if (tokenCriteria.validateToken(jwtToken, userDetails)) {
+            	
                 UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                 usernamePasswordAuthenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
                 SecurityContextHolder.getContext().setAuthentication(usernamePasswordAuthenticationToken);
+                
             }
         }
         chain.doFilter(request, response);

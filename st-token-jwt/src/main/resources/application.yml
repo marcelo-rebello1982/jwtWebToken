@@ -4,10 +4,10 @@ spring:
 
   data:
     mongodb:
-      database: st-boot-jwt
+      database: st_security
       host: localhost 
-      password: Y3N0LWJvb3Qtand0LTIwWFgjI0A=
-      username: st-boot-jwt-20XX
+      password: c2VjXzIwWFgjMQ==
+      username: st_sec_2OZI
 
 server:
   port: 0
@@ -19,4 +19,6 @@ eureka:
     service-url:
       defaultZone: http://eureka.server:9100/eureka
 
-#db.createUser({user:"st-boot-jwt-20XX",pwd:"Y3N0LWJvb3Qtand0LTIwWFgjI0A=", roles: [{ role: "readWrite", db: "st-boot-jwt" }], passwordDigestor:"server"});
+# use st_security
+#db.grantRolesToUser("st-boot-jwt-20XX", [{ role: "dbOwner", db: "st_security" }])
+#db.changeUserPassword("st_sec_2OZI", "c2VjXzIwWFgjMQ==")1
