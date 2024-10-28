@@ -35,7 +35,6 @@ public class JwtAuthenticationService {
 	
 	public final UserDetailJwtRepository userDetailJwtRepository;
 	
-	static final long EXPIRATION_TIME = System.getenv("expire") != null ? (Long.parseLong(System.getenv("EXPIRE")) * (1000 * 60 * 60 * 24))	: (1000 * 60 * 60 * 24);
 	
 	public UserDetailsJwt findNoSqlUser(Criteria criteria, JwtRequest jwtRequest) {
 		
@@ -75,7 +74,7 @@ public class JwtAuthenticationService {
 			userDetailsService.setPassword(userDetailsJwt.getPassword());
 			userDetailsService.setTextPlainPass(jwtRequest.getPassword());
 			
-			Long dateToExpire =  this.calculateDateToExpire(jwtRequest.getDaysToExpire());
+			Long dateToExpire =  DateUtils.calculateDateToExpire(jwtRequest.getDaysToExpire());
 
 			final UserDetails userDetails = userDetailsService.loadUserByUsername(userDetailsJwt.getUsername());
 			final String token 			  = jwtTokenUtil.generateToken(userDetails, dateToExpire);
@@ -109,7 +108,7 @@ public class JwtAuthenticationService {
 			userDetailsService.setPassword(userDetailsJwt.getPassword());
 			userDetailsService.setTextPlainPass(jwtRequest.getPassword());
 			
-			Long daysToExpire =  this.calculateDateToExpire(jwtRequest.getDaysToExpire());
+			Long daysToExpire =  DateUtils.calculateDateToExpire(jwtRequest.getDaysToExpire());
 			
 			final UserDetails userDetails = userDetailsService.loadUserByUsername(userDetailsJwt.getUsername());
 			final String token 			  = jwtTokenUtil.generateToken(userDetails, daysToExpire);
@@ -141,34 +140,6 @@ public class JwtAuthenticationService {
 		return ChronoUnit.DAYS.between(date1, date2);
 	}
 
-	public long addDaysUtc(long timestamp, long days) {
-
-		return LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), 
-				ZoneOffset.UTC).plusDays(days)
-					.toInstant(ZoneOffset.UTC)
-						.toEpochMilli();
-		
-	}
-	
-	private long calculateDateToExpire(Long daysToExpire) {
-		
-		long days = Optional.ofNullable(DateUtils.getDaysBetweenUtc(
-						DateUtils.getCurrentUtcTimestamp(), 
-							this.calculateTokenValidity(daysToExpire)))
-								.orElse(1L);
-		return Instant.now()
-					.plus(days * EXPIRATION_TIME, ChronoUnit.MILLIS)
-						.toEpochMilli();
-		
-	}
-	
-	private long calculateTokenValidity (Long daysToExpire) {
-		
-		return new Date(System.currentTimeMillis() +
-				( EXPIRATION_TIME * ( daysToExpire != null ?
-						daysToExpire : 1L ))).getTime();
-		
-	}
 
 	// use to crypt ou decrypt password 
 	public String processPassword(JwtRequest jwtRequest) {

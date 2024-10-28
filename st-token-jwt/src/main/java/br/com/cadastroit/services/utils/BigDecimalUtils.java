@@ -4,6 +4,7 @@ import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.NumberFormat;
+import java.util.List;
 import java.util.Locale;
 
 public class BigDecimalUtils {
@@ -13,6 +14,19 @@ public class BigDecimalUtils {
 	public static final int SCALE_MONEY = 2;
 	public static final int SCALE = 10;
 
+	public static BigDecimal getZeroIfNull(BigDecimal value) {
+		return value == null ? BigDecimal.ZERO : value;
+	}
+	
+	public static BigDecimal parseToBigDecimal(String value) throws Exception {
+
+		try {
+			return new BigDecimal(value);
+		} catch (NumberFormatException e) {
+			throw new Exception("exception.illegal.argument.number.format");
+		}
+	}
+
 	public static BigDecimal parseToBigDecimal(double valor) {
 
 		if (Double.isNaN(valor)) {
@@ -21,8 +35,9 @@ public class BigDecimalUtils {
 		return BigDecimal.valueOf(valor);
 	}
 
-	public static BigDecimal getZeroIfNull(BigDecimal value) {
-		return value == null ? BigDecimal.ZERO : value;
+	public static BigDecimal zeroIfNull(String value) {
+
+		return StringUtils.isBlank(value) ? BigDecimal.ZERO : new BigDecimal(value);
 	}
 
 	public static BigDecimal zeroIfNull(BigDecimal value) {
@@ -51,16 +66,24 @@ public class BigDecimalUtils {
 		return resultadoComparacao == 1;
 	}
 
-	public static boolean isLessThanZero(BigDecimal valor) {
-
-		return isLessThan(valor, BigDecimal.ZERO);
-	}
-
 	public static boolean isLessOrEqualThanZero(BigDecimal valor) {
 
 		return isLessOrEqualThan(valor, BigDecimal.ZERO);
 	}
+	
+	public static BigDecimal zeroIfNegative(BigDecimal value) {
 
+		if (isLessThanZero(value))
+			return BigDecimal.ZERO;
+
+		return value;
+	}
+	
+	public static boolean isLessThanZero(BigDecimal valor) {
+
+		return isLessThan(valor, BigDecimal.ZERO);
+	}
+	
 	public static boolean isLessOrEqualThan(BigDecimal valor, BigDecimal comparacao) {
 
 		return isLessThan(valor, comparacao) || isEqual(valor, comparacao);
@@ -69,6 +92,26 @@ public class BigDecimalUtils {
 	public static boolean isLessThan(BigDecimal valor, BigDecimal comparadao) {
 
 		return comparacao(valor, comparadao) == -1;
+	}
+
+	private static int comparacao(BigDecimal valor, BigDecimal comparacao) {
+
+		valor = zeroIfNull(valor);
+
+		if (comparacao == null)
+			comparacao = BigDecimal.ZERO;
+
+		int resultado = valor.compareTo(comparacao);
+
+		return resultado;
+	}
+
+	public static BigDecimal parseToBigDecimalOrZero(String value) throws Exception {
+
+		if (StringUtils.isBlank(value))
+			return BigDecimal.ZERO;
+
+		return parseToBigDecimal(value);
 	}
 
 	public static BigDecimal parseToBigDecimalOrZero(Object value) {
@@ -159,7 +202,7 @@ public class BigDecimalUtils {
 	}
 
 	/**
-	 * M�todo duplicado de arrendondar mas utilizando RoudingMode.DOWN. Utilizar m�todo {@link #arredondar() arredondar}
+	 * Método duplicado de arrendondar mas utilizando RoudingMode.DOWN. Utilizar método {@link #arredondar() arredondar}
 	 */
 	@Deprecated
 	public static BigDecimal truncar(BigDecimal value) {
@@ -168,7 +211,7 @@ public class BigDecimalUtils {
 	}
 
 	/**
-	 * M�todo duplicado de arrendondar mas utilizando RoudingMode.DOWN. Utilizar m�todo {@link #arredondar() arredondar}
+	 * Método duplicado de arrendondar mas utilizando RoudingMode.DOWN. Utilizar método {@link #arredondar() arredondar}
 	 */
 	@Deprecated
 	public static BigDecimal truncar(BigDecimal value, int scale) {
@@ -176,17 +219,149 @@ public class BigDecimalUtils {
 		return arredondar(value, scale, RoundingMode.DOWN);
 	}
 
+	/**
+	 * Soma os valores do campo (utilizando {@linkplain nomeCampo}) dos {@link itens} para calcular a diferença entre o
+	 * {@linkplain total}.<br>
+	 * <br>
+	 * O valor {@linkplain total} e os valores da lista, não podem ter diferença de casas decimais.<br>
+	 * Para evitar isto, será utilizado a quantidade de casas decimais do {@linkplain total} se a quantidade de casas for maior ou
+	 * igual a 2.<br>
+	 * Caso contrário será utilizado 2 casas decimais.
+	 * <ul>
+	 * <li>Se a diferença for igual a zero, retorna e não faz nada.</li>
+	 * <li>Se a diferença for maior que zero, aplica no valor do campo (utilizando {@linkplain nomeCampo}) do primeiro item da
+	 * lista de {@linkplain itens}.</li>
+	 * <li>Se a diferença for menor que zero, procura na lista de {@linkplain itens} um item que tenha o valor maior que a
+	 * difereça para aplicar.</li>
+	 * </ul>
+	 * 
+	 * @param itens Itens para somar e aplicar a diferença.
+	 * @param total Valor original para calcular a diferença.
+	 * @param nomeCampo Nome do campo para obter a somatória dos itens.
+	 * @param classe Tipo dos itens da lista.
+	 * @throws VUtilsRuntimeException Se não for possível aplicar a diferença em nenhum item.
+	 */
+	public static void redistribuirValoresDizima(List<? extends Object> itens, BigDecimal total, String nomeCampo, Class<? extends Object> classe)
+			throws Exception {
+
+		int scale = total.scale() >= SCALE_MONEY ? total.scale() : SCALE_MONEY;
+		redistribuirValoresDizima(itens, total, nomeCampo, classe, scale);
+	}
+
+	/**
+	 * Soma os valores do campo (utilizando {@linkplain nomeCampo}) dos {@link itens} para calcular a diferença entre o
+	 * {@linkplain total}.
+	 * <ul>
+	 * <li>Se a diferença for igual a zero, retorna e não faz nada.</li>
+	 * <li>Se a diferença for maior que zero, aplica no valor do campo (utilizando {@linkplain nomeCampo}) do primeiro item da
+	 * lista de {@linkplain itens}.</li>
+	 * <li>Se a diferença for menor que zero, procura na lista de {@linkplain itens} um item que tenha o valor maior que a
+	 * difereça para aplicar.</li>
+	 * </ul>
+	 * 
+	 * @param itens Itens para somar e aplicar a diferença.
+	 * @param total Valor original para calcular a diferença.
+	 * @param nomeCampo Nome do campo para obter a somatória dos itens.
+	 * @param classe Tipo dos itens da lista.
+	 * @param casasDecimais Quantidade de casas decimais para truncar o {@linkplain total} e a soma dos valores dos
+	 *            {@linkplain itens}.
+	 * @throws VUtilsRuntimeException Se não for possível aplicar a diferença em nenhum item.
+	 */
+	public static void redistribuirValoresDizima(List<? extends Object> itens, BigDecimal total, String nomeCampo, Class<? extends Object> classe, int casasDecimais)
+			throws Exception {
+
+
+		if (isZero(total))
+			return;
+
+		BigDecimal totalTruncado = truncar(total, casasDecimais);
+
+		try {
+
+			BigDecimal acumulador = BigDecimal.ZERO;
+
+			for (Object item : itens) {
+				Field campo = getField(classe, nomeCampo);
+				BigDecimal valorCampo = truncar(BigDecimalUtils.parseToBigDecimalOrZero(campo.get(item)), casasDecimais);
+
+				acumulador = acumulador.add(valorCampo);
+			}
+
+			BigDecimal diferenca = totalTruncado.subtract(acumulador);
+			setarDiferenca(itens, classe, nomeCampo, diferenca);
+
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw e;
+		}
+	}
+
+	public static void redistribuirValoresDiferenca(List<? extends Object> itens, BigDecimal total, BigDecimal totalCalculado, String nomeCampo, Class<? extends Object> classe)
+			throws Exception {
+
+		if (isZero(total))
+			return;
+
+		try {
+
+			BigDecimal diferenca = total.subtract(totalCalculado);
+			setarDiferenca(itens, classe, nomeCampo, diferenca);
+
+		} catch (Exception e) {
+			e.printStackTrace();
+			throw e;
+		}
+	}
 	
-	private static int comparacao(BigDecimal valor, BigDecimal comparacao) {
+	private static void setarDiferenca(List<? extends Object> itens, Class<? extends Object> classe, String nomeAtributo, BigDecimal diferenca)
+			throws Exception {
 
-		valor = zeroIfNull(valor);
+		if (isZero(diferenca))
+			return;
 
-		if (comparacao == null)
-			comparacao = BigDecimal.ZERO;
+		Field campo = getField(classe, nomeAtributo);
 
-		int resultado = valor.compareTo(comparacao);
+		if (isLessThanZero(diferenca)) {
+			// Caso a diferenca seja negativa remove valor dos últimos itens para o primeiro, se disponível.
+			// Se o valor do campo for menor que a diferença, zera o valor do campo e diminui da diferença para passar ao próximo
+			// item.
 
-		return resultado;
+			for (int i = itens.size() - 1; i >= 0; i--) {
+
+				Object item = itens.get(i);
+				BigDecimal valor = parseToBigDecimalOrZero(campo.get(item));
+
+				if (isLessOrEqualThanZero(valor))
+					continue;
+
+				BigDecimal valorComDiferenca = BigDecimal.ZERO;
+
+				if (isGreaterThan(diferenca.abs(), valor)) {
+
+					campo.set(item, BigDecimal.ZERO);
+					diferenca = diferenca.add(valor);
+
+				} else {
+					valorComDiferenca = valor.add(diferenca);
+
+					if (isGreaterOrEqualThanZero(valorComDiferenca)) {
+						campo.set(item, valorComDiferenca);
+						return;
+					}
+				}
+
+			}
+
+			// Não conseguiu aplicar a diferença porque o valor final do item ficaria negativo.
+			throw new Exception("Não foi possível aplicar a diferença em nenhum dos itens da lista.");
+
+		} else {
+			// Caso a diferenca seja maior que zero, soma ao primeiro elemento.
+
+			Object item = itens.get(0);
+			BigDecimal valor = (BigDecimal) campo.get(item);
+			campo.set(item, valor.add(diferenca));
+		}
 	}
 
 	private static Field getField(Class<? extends Object> classe, String nomeAtributo) throws NoSuchFieldException {
@@ -261,7 +436,7 @@ public class BigDecimalUtils {
 	}
 
 	/**
-	 * Utilizar o m�todo formatarValorMonetario()
+	 * Utilizar o método formatarValorMonetario()
 	 */
 	@Deprecated
 	public static String toString(BigDecimal valor) {
@@ -270,7 +445,7 @@ public class BigDecimalUtils {
 	}
 
 	/**
-	 * Utilizar o m�todo formatarValorMonetario()
+	 * Utilizar o método formatarValorMonetario()
 	 */
 	@Deprecated
 	public static String toString(BigDecimal valor, boolean usaSeparadorMilhar) {
@@ -279,7 +454,7 @@ public class BigDecimalUtils {
 	}
 
 	/**
-	 * Utilizar o m�todo formatarValorMonetario()
+	 * Utilizar o método formatarValorMonetario()
 	 */
 	@Deprecated
 	public static String toString(BigDecimal valor, boolean usaSeparadorMilhar, int casasDecimais) {
@@ -309,12 +484,21 @@ public class BigDecimalUtils {
 		return divide(value.add(value2), DOIS);
 	}
 
-	public static BigDecimal zeroIfNegative(BigDecimal value) {
+	/**
+	 * Formata um valor para uma string no formato percentual <br>
+	 * Exemplos: <br>
+	 * 15.15 -> 15,15% <br>
+	 * 20 -> 20,00%
+	 */
+	public static String formatarPorcentagem(BigDecimal valor) {
 
-		if (isLessThanZero(value))
-			return BigDecimal.ZERO;
+		if (valor == null)
+			return StringUtils.EMPTY;
 
-		return value;
+		NumberFormat percentFormat = NumberFormat.getPercentInstance();
+		percentFormat.setMaximumFractionDigits(2);
+		percentFormat.setMinimumFractionDigits(2);
+
+		return percentFormat.format(dividePorCem(valor));
 	}
-
 }

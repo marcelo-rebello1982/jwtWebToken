@@ -49,7 +49,7 @@ public class JwtAuthenticationController {
 			Criteria criteria = Criteria.where("username").is(jwtRequest.getUsername());
 			UserDetailsJwt userDetailsJwt = this.jwtAuthenticationService.findNoSqlUser(criteria, jwtRequest);
 			
-			if (validateUser(userDetailsJwt) && mathPassword(jwtRequest.getPassword(), userDetailsJwt)) {
+			if (this.jwtUserDetailsService.validateUserDetails(userDetailsJwt) && mathPassword(jwtRequest.getPassword(), userDetailsJwt)) {
 					
 					if (userDetailsJwt.getJwttoken() == null) {
 						
@@ -65,7 +65,7 @@ public class JwtAuthenticationController {
 						
 					} else 
 						
-						return (validateTokenDate(userDetailsJwt))
+						return jwtUserDetailsService.dateTokenIsValid(userDetailsJwt)
 								
 								? ResponseEntity.ok(new JwtResponse(
 										userDetailsJwt.getJwttoken(), 
@@ -75,9 +75,11 @@ public class JwtAuthenticationController {
 										""
 								))
 										
-								: ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Token has expired, please refresh it...");
+								: ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+										.body("Token has expired, please refresh it...");
 					
 			} else
+				
 				return errorResponse();
 				
 		} catch (Exception ex) {
@@ -142,7 +144,7 @@ public class JwtAuthenticationController {
 			Criteria criteria = Criteria.where("username").is(jwtRequest.getUsername());
 			UserDetailsJwt userDetailsJwt = this.jwtAuthenticationService.findNoSqlUser(criteria, jwtRequest);
 			
-			if (validateUser(userDetailsJwt) && mathPassword(jwtRequest.getPassword(), userDetailsJwt)) {
+			if (validateToken(userDetailsJwt) && mathPassword(jwtRequest.getPassword(), userDetailsJwt)) {
 				
 					return Optional.ofNullable(userDetailsJwt)
 						    .map(u -> {
@@ -157,36 +159,38 @@ public class JwtAuthenticationController {
 		}
 	}
 
-	@ApiOperation(value = "get validity from access-token.")
+	@ApiOperation(value = "Check validity from access-token.")
 	@PostMapping(value = "/checkvaliditytoken")
 	public ResponseEntity<Object> checkvaliditytoken(@ApiParam(required = true, value = "Fill the object JwtRequest with jwttoken only") @RequestBody JwtRequest jwtRequest)
 			throws Exception {
 
 		try {
 			
+			this.jwtUserDetailsService = this.buildJwtUserDetailsService();
+			
 			Criteria criteria = Criteria.where("jwttoken").is(jwtRequest.getToken());
 			UserDetailsJwt userDetailsJwt = this.jwtAuthenticationService.findNoSqlUser(criteria, jwtRequest);
+			jwtRequest.setUsername(userDetailsJwt.getUsername());
 			
-			if ((userDetailsJwt == null)) 
+			if (!this.jwtUserDetailsService.validateUserDetails(userDetailsJwt)) 
 				return errorResponse();
 			
-			jwtRequest.setUsername(userDetailsJwt.getUsername());
-
-			if (validateUser(userDetailsJwt)) {
+			if (this.jwtUserDetailsService.validateUserDetails(userDetailsJwt) && this.jwtUserDetailsService.dateTokenIsValid(userDetailsJwt)) {
 				
-				return ResponseEntity.ok(new JwtResponse(
-								null,
-								null,
-								Long.valueOf(userDetailsJwt.getExpire()),
-								userDetailsJwt.getDateExpire(),
-								"credentials are valid!"
-						));
+				return ResponseEntity.ok(
+									new JwtResponse(
+											userDetailsJwt.getJwttoken(), 
+											userDetailsJwt.getJwttoken(),
+											Long.valueOf(userDetailsJwt.getExpire()),
+											userDetailsJwt.getDateExpire(), 
+											"credentials are valid!")
+						);
 				
-			} else {
+			} else
+				return ResponseEntity.status(HttpStatus.FORBIDDEN).body(JwtResponse.builder()
+																			.message("Access Denied, credentials are invalid!")
+																			.dateExpire(userDetailsJwt.getDateExpire()));
 				
-				return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access Denied, credentials are invalid!");
-				
-			}
 		} catch (Exception ex) {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
 		}
@@ -202,17 +206,20 @@ public class JwtAuthenticationController {
 			Criteria criteria = Criteria.where("username").is(jwtRequest.getUsername());
 			UserDetailsJwt userDetailsJwt = this.jwtAuthenticationService.findNoSqlUser(criteria, jwtRequest);
 			
-			if ( !validateUser(userDetailsJwt) || ( !mathPassword(jwtRequest.getPassword(), userDetailsJwt)) )
+			if ( !validateToken(userDetailsJwt) || ( !mathPassword(jwtRequest.getPassword(), userDetailsJwt)) )
 				
 				return errorResponse();
 
 			String token[] = this.jwtAuthenticationService.createUserTokenStr(userDetailsJwt, jwtRequest);
 			
-			return ResponseEntity.ok(JwtResponse.builder().token(token[0])
-					.jwttoken(token[0])
-					.expire(Long.valueOf(token[1]))
-					.dateExpire(token[2])
-					.build());
+			return ResponseEntity.ok(
+								JwtResponse.builder()
+								.token(token[0])
+								.jwttoken(token[0])
+								.expire(Long.valueOf(token[1]))
+								.dateExpire(token[2])
+								.build()
+					);
 			
 		} catch (Exception ex) {
 			return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ex.getMessage());
@@ -284,20 +291,10 @@ public class JwtAuthenticationController {
 		return userGroup != null && userGroup.getGroup() != null;
 	}
 	
-	private boolean validateUser(UserDetailsJwt userDetailsJwt) {
-		
-		this.jwtUserDetailsService = this.buildJwtUserDetailsService();
-		
-		return jwtUserDetailsService.validateUserDetails(userDetailsJwt);
+	private boolean validateToken(UserDetailsJwt userDetailsJwt) {
+		return this.jwtUserDetailsService.validateUserDetails(userDetailsJwt);
 	}
 	
-	private boolean validateTokenDate(UserDetailsJwt userDetailsJwt) {
-		
-		long dateToExpire = userDetailsJwt.getExpire();
-		long actualDate = System.currentTimeMillis();
-		
-		return  dateToExpire > actualDate;
-	}
 	
 	private boolean mathPassword(String password, UserDetailsJwt userDetailsJwt) {
 		boolean matchPassword = passwordEncoder.matches(password, userDetailsJwt.getPassword());
